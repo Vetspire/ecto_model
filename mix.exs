@@ -60,6 +60,8 @@ defmodule EctoModel.MixProject do
       # Ecto Model's actual dependencies
       {:jason, "~> 1.1"},
       {:ecto, "~> 3.6"},
+      {:ecto_middleware, "~> 1.0"},
+      {:ecto_hooks, "~> 1.2"},
 
       # Adapter Dependencies, should be supplied by host app but these
       # are nice to have for tests.
