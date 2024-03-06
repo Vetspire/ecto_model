@@ -13,7 +13,13 @@ alias Credo.Check
           "apps/*/src/",
           "apps/*/web/"
         ],
-        excluded: [~r"/tests/", ~r"/_build/", ~r"/deps/", ~r"/node_modules/"]
+        excluded: [
+          ~r"/tests/",
+          ~r"/_build/",
+          ~r"/deps/",
+          ~r"/node_modules/",
+          ~r"/lib/ecto_model/test"
+        ]
       },
       plugins: [],
       requires: [],
@@ -121,7 +127,6 @@ alias Credo.Check
           {Check.Warning.UnsafeToAtom, []},
 
           ## Causes Issues with Phoenix ----------------------------------------
-          {Check.Readability.Specs, []},
           {Check.Refactor.ModuleDependencies, [max_deps: 19]},
 
           ## Optional (move to `disabled` based on app domain) -----------------
@@ -134,6 +139,7 @@ alias Credo.Check
           {Check.Readability.BlockPipe, []},
           {Check.Readability.AliasAs, []},
           {Check.Refactor.AppendSingleItem, []},
+          {Check.Readability.Specs, []},
 
           ## Incompatible with modern versions of Elixir -----------------------
           {Check.Refactor.MapInto, []},
