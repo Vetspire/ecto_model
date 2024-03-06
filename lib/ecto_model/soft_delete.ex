@@ -14,6 +14,18 @@ defmodule EctoModel.SoftDelete do
      In future, we may add support for automatically delegating hard delete operations to transparently behave transparently as soft deletes in an
      opt in basis.
 
+     You can also optionally add the following code to your `MyApp.Repo` module to enable easy soft delete operations:
+
+     ```elixir
+     def soft_delete!(resource, opts \\ []) do
+       EctoModel.SoftDelete.soft_delete!(resource, Keyword.put(opts, :repo, __MODULE__))
+     end
+
+     def soft_delete(resource, opts \\ []) do
+       EctoModel.SoftDelete.soft_delete(resource, Keyword.put(opts, :repo, __MODULE__))
+     end
+     ```
+
   2) You need to `use EctoModel.SoftDelete` in your schema, and configure the `field` and `type` options.
 
      The specified field and type must match what is defined on said schema, though there are compile time validations provided for you to ensure
@@ -81,6 +93,8 @@ defmodule EctoModel.SoftDelete do
     type = __MODULE__.soft_delete_type!(opts[:type])
 
     quote location: :keep do
+      @after_compile unquote(__MODULE__)
+
       def soft_delete_config,
         do: %unquote(__MODULE__).Config{field: unquote(field), type: unquote(type)}
 
@@ -120,24 +134,24 @@ defmodule EctoModel.SoftDelete do
   end
 
   defp field_not_configured(schema, %Config{} = config) when is_atom(schema) do
-    raise """
+    raise ArgumentError, """
     The `#{inspect(schema)}` schema is configured to implement soft deletes via the
-    `:#{inspect(config.field)}` field, but this field does not exist on said schema.
+    `#{inspect(config.field)}` field, but this field does not exist on said schema.
 
-    Please ensure that the `:#{inspect(config.field)}` field is defined on the schema,
-    with the type `:#{inspect(config.type)}`, or change the configuration to point
+    Please ensure that the `#{inspect(config.field)}` field is defined on the schema,
+    with the type `#{inspect(config.type)}`, or change the configuration to point
     to a different field via the `field: field_name :: atom()` when `use`-ing
     `inspect(#{__MODULE__})`
     """
   end
 
   defp field_type_mismatch(schema, %Config{} = config) when is_atom(schema) do
-    raise """
+    raise ArgumentError, """
     The `#{inspect(schema)}` schema is configured to implement soft deletes via the
-    `:#{inspect(config.field)}` field of type `:#{inspect(config.type)}`, but this field
-    is defined on the schema with a different type.
+    `#{inspect(config.field)}` field of type `#{inspect(config.type)}`,
+    but this field has the wrong type.
 
-    Please ensure that the `:#{inspect(config.field)}` field is defined on the schema,
+    Please ensure that the `#{inspect(config.field)}` field is defined on the schema,
     with the type `:#{inspect(config.type)}`, or change the configuration to point
     to a different field via the `type: type_name :: atom()` when `use`-ing
     `inspect(#{__MODULE__})`
@@ -212,10 +226,14 @@ defmodule EctoModel.SoftDelete do
   def apply_filter!(schema, query) when is_atom(schema) do
     import Ecto.Query
 
+    # This clause is only ever going to be reached if someone does something naughty!
+    # coveralls-ignore-start
     unless function_exported?(schema, :soft_delete_config, 0) do
       raise ArgumentError,
         message: "The `#{inspect(schema)}` schema is not configured to implement soft deletes."
     end
+
+    # coveralls-ignore-stop
 
     case schema.soft_delete_config() do
       %Config{type: :boolean} = config ->
@@ -234,11 +252,16 @@ defmodule EctoModel.SoftDelete do
     resource
   end
 
+  # TODO: this fallback clause will never be reached until `EctoMiddleware` supports `delete_all/2`
+  # coveralls-ignore-start
   def middleware(%Ecto.Query{} = queryable, resolution) do
     schema =
       case queryable.from.source do
-        {_table, schema} when is_atom(schema) -> schema
-        _otherwise -> nil
+        {_table, schema} when is_atom(schema) ->
+          schema
+
+        _otherwise ->
+          nil
       end
 
     :ok = maybe_validate_repo_action!(schema, resolution.action)
@@ -246,12 +269,16 @@ defmodule EctoModel.SoftDelete do
     queryable
   end
 
+  # coveralls-ignore-stop
+
   def middleware(%schema{} = resource, resolution)
       when resolution.action in [:delete, :delete!, :delete_all] do
     :ok = maybe_validate_repo_action!(schema, resolution.action)
     resource
   end
 
+  # TODO: this clause will never be reached until `EctoMiddleware` supports `delete_all/2`
+  # coveralls-ignore-start
   def middleware(schema, resolution) when is_atom(schema) and resolution.action == :delete_all do
     :ok = maybe_validate_repo_action!(schema, resolution.action)
     schema
@@ -261,9 +288,11 @@ defmodule EctoModel.SoftDelete do
     resource
   end
 
+  # coveralls-ignore-stop
+
   defp maybe_validate_repo_action!(schema, action)
        when is_atom(schema) and action in [:delete, :delete!, :delete_all] do
-    if function_exported?(schema, :soft_delete?, 0) && schema.soft_delete?() do
+    if function_exported?(schema, :soft_delete_config, 0) && schema.soft_delete_config() do
       raise ArgumentError,
         message: """
         You are trying to delete a schema that uses soft deletes. Please use `Repo.soft_delete/2` instead.
@@ -271,5 +300,54 @@ defmodule EctoModel.SoftDelete do
     end
 
     :ok
+  end
+
+  @doc " See `Ecto.Repo.soft_delete/2` for more information."
+  @spec soft_delete!(resource :: struct(), opts :: Keyword.t()) :: struct() | no_return()
+  def soft_delete!(resource, opts \\ []) do
+    {:ok, resource} = soft_delete(resource, opts)
+    resource
+  end
+
+  @doc """
+  Will soft delete a given resource, and persist the changes to the database, based on that resource's configured
+  soft delete field and type.
+
+  Will raise if given an entity that does not opt into soft deletes.
+
+  # TODO: we will need to implement something more fully fledged to support `delete_all/2` and the like
+  """
+  @spec soft_delete!(resource :: struct(), opts :: Keyword.t()) ::
+          {:ok, struct()} | {:error, term()}
+  def soft_delete(%schema{} = resource, opts \\ []) do
+    # coveralls-ignore-start
+    unless opts[:repo] do
+      raise ArgumentError,
+        message: "You must provide a `:repo` option when delegating to, or using `soft_delete/2`"
+    end
+
+    # coveralls-ignore-stop
+
+    unless function_exported?(schema, :soft_delete_config, 0) do
+      raise ArgumentError,
+        message:
+          "The `#{inspect(schema)}` schema is not configured to implement soft deletes, please use `Repo.delete/2` instead."
+    end
+
+    case schema.soft_delete_config() do
+      %Config{type: :boolean} = config ->
+        resource
+        |> Ecto.Changeset.change()
+        |> Ecto.Changeset.put_change(config.field, true)
+        |> opts[:repo].update(opts)
+
+      %Config{type: type} = config when type in [:utc_datetime, :datetime] ->
+        now = DateTime.truncate(DateTime.utc_now(), :second)
+
+        resource
+        |> Ecto.Changeset.change()
+        |> Ecto.Changeset.put_change(config.field, now)
+        |> opts[:repo].update(opts)
+    end
   end
 end

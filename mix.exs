@@ -31,9 +31,13 @@ defmodule EctoModel.MixProject do
       homepage_url: "https://github.com/vetspire/ecto_model",
       docs: [
         main: "EctoModel"
-      ]
+      ],
+      elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def application do
     [
@@ -67,6 +71,7 @@ defmodule EctoModel.MixProject do
       # are nice to have for tests.
       {:postgrex, "~> 0.15", only: :test},
       {:ecto_sql, "~> 3.6", only: :test},
+      {:ex_machina, "~> 2.7.0", only: :test},
 
       # Runtime dependencies for tests / linting
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
