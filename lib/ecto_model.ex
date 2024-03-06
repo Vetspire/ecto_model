@@ -1,3 +1,3 @@
 defmodule EctoModel do
-  @moduledoc false
+  @moduledoc File.read!("README.md")
 end

@@ -336,8 +336,8 @@ defmodule EctoModel.SoftDelete do
 
   Will raise if given an entity that does not opt into soft deletes.
 
-  # TODO: we will need to implement something more fully fledged to support `delete_all/2` and the like
   """
+  # TODO: we will need to implement something more fully fledged to support `delete_all/2` and the like
   @spec soft_delete(resource :: struct(), opts :: Keyword.t()) ::
           {:ok, struct()} | {:error, term()}
   def soft_delete(%schema{} = resource, opts \\ []) do
